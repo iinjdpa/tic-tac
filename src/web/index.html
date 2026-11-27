@@ -1,0 +1,536 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b1120" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="description" content="Calibrador acústico en tiempo real para alinear el tic-tac de relojes de péndulo con el micrófono del móvil." />
+  <title>Tic-Tac · Calibrador de Reloj de Péndulo</title>
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+  <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div
+        class="brand has-tooltip"
+        title="Aplicación web progresiva (PWA) para calibrar el escape de un reloj de péndulo mediante el micrófono del móvil, funcionando 100 % en local y sin conexión una vez instalada."
+        data-tooltip="Aplicación web progresiva (PWA) para calibrar el escape de un reloj de péndulo mediante el micrófono del móvil. Todo el audio se procesa dentro de tu teléfono y funciona sin internet una vez instalada."
+      >
+        <img src="./icons/icon.svg" alt="" class="brand-icon" width="36" height="36" />
+        <div>
+          <h1 class="brand-title">Tic-Tac</h1>
+          <p class="brand-subtitle">Calibrador de péndulo</p>
+        </div>
+      </div>
+
+      <div class="topbar-actions">
+        <span
+          id="wakelock-badge"
+          class="status-pill muted has-tooltip"
+          title="Indica si el bloqueo de apagado de pantalla está activo para que el móvil no se apague mientras ajustas el reloj."
+          data-tooltip="Pantalla activa (Wake Lock): evita que Android apague o bloquee la pantalla automáticamente mientras tienes las manos ocupadas nivelando el reloj."
+        >
+          Pantalla normal
+        </span>
+        <button
+          id="btn-install"
+          type="button"
+          class="btn btn-install hidden has-tooltip"
+          title="Instala esta aplicación en la pantalla de inicio de Android para usarla a pantalla completa y sin conexión a internet."
+          data-tooltip="Instala Tic-Tac como aplicación en tu móvil Android. Una vez instalada, queda guardada en la memoria del teléfono y no vuelve a necesitar conexión ni GitHub Pages."
+        >
+          Instalar app
+        </button>
+      </div>
+    </header>
+
+    <main class="main-grid">
+      <!-- Controles principales -->
+      <section class="card controls-card" aria-label="Controles de captura">
+        <div class="primary-buttons">
+          <button
+            id="btn-mic"
+            type="button"
+            class="btn btn-primary has-tooltip"
+            title="Activa o detiene la escucha en vivo usando el micrófono del móvil sin procesado de voz automático."
+            data-tooltip="Inicia o detiene la captura del micrófono en crudo (desactivando cancelación de eco, supresión de ruido de voz y ganancia automática de Android) para detectar con precisión los golpes del escape."
+          >
+            <span class="mic-dot" aria-hidden="true"></span>
+            <span id="btn-mic-label">Iniciar micrófono</span>
+          </button>
+
+          <button
+            id="btn-reset"
+            type="button"
+            class="btn btn-secondary has-tooltip"
+            title="Borra los intervalos acumulados para medir desde cero justo después de mover o nivelar el reloj."
+            data-tooltip="Reinicia las estadísticas y el gráfico sin cortar el micrófono. Úsalo cada vez que modifiques la inclinación de la caja o el áncora para evaluar el nuevo ajuste limpio."
+          >
+            Reiniciar ventana
+          </button>
+        </div>
+
+        <div class="secondary-buttons">
+          <button
+            id="btn-swap"
+            type="button"
+            class="btn btn-ghost has-tooltip"
+            title="Intercambia la etiqueta TIC y TAC en caso de querer invertir el sentido de referencia en la escala."
+            data-tooltip="Invierte la asignación par/impar entre TIC y TAC por si prefieres alinear el signo de la aguja con la oscilación izquierda o derecha de tu péndulo."
+          >
+            Invertir TIC/TAC
+          </button>
+
+          <label
+            for="file-input"
+            class="btn btn-ghost file-label has-tooltip"
+            title="Analiza una grabación de audio guardada en el dispositivo usando exactamente el mismo filtro y detector."
+            data-tooltip="Carga un archivo de audio (.wav, .mp3, .ogg, .m4a) para analizar una grabación del reloj con el mismo filtro pasa-banda y detector de impulsos."
+          >
+            Analizar archivo
+            <input id="file-input" type="file" accept="audio/*,video/mpeg,.wav,.mp3,.ogg,.m4a" hidden />
+          </label>
+        </div>
+
+        <p
+          id="status-banner"
+          class="status-banner has-tooltip"
+          title="Estado actual del motor de audio y diagnóstico rápido de la captura."
+          data-tooltip="Muestra el estado actual del micrófono, la frecuencia de muestreo activa y avisos sobre permisos o calidad de señal."
+        >
+          Acerca el micrófono a 10–30 cm del reloj y pulsa «Iniciar micrófono».
+        </p>
+      </section>
+
+      <!-- Escala / Aguja de Beat Error (Cojera) -->
+      <section class="card gauge-card" aria-label="Indicador de equilibrio del escape">
+        <div class="card-header">
+          <h2 class="card-title">Equilibrio del escape (cojera)</h2>
+          <button
+            type="button"
+            class="tip-btn"
+            aria-label="Información sobre el equilibrio del escape"
+            title="Explica cómo interpretar la aguja de equilibrio y corregir la cojera del reloj."
+            data-tooltip="Un reloj de péndulo está «en compás» cuando el tiempo TIC→TAC es idéntico al TAC→TIC (0.0 ms en el centro verde). Si la aguja se desvía a un lado, nivela suavemente la caja del reloj o ajusta la horquilla hasta centrarla por debajo de ±3 ms (0.5 %)."
+          >?</button>
+        </div>
+
+        <div
+          class="gauge-wrapper has-tooltip"
+          title="Aguja de desviación de semiperíodo: el centro (0 ms) indica simetría perfecta entre TIC→TAC y TAC→TIC."
+          data-tooltip="Escala de simetría entre golpes (-40 ms a +40 ms). Zona verde (±3 ms): escape equilibrado. Zona ámbar (±10 ms): ligera cojera. Zona roja (>10 ms): desalineación clara."
+        >
+          <div class="gauge-labels">
+            <span class="tag-tic">TIC → TAC menor</span>
+            <span class="tag-center">0.0 ms</span>
+            <span class="tag-tac">TIC → TAC mayor</span>
+          </div>
+          <div class="gauge-track">
+            <div class="gauge-zone zone-red-left"></div>
+            <div class="gauge-zone zone-amber-left"></div>
+            <div class="gauge-zone zone-green"></div>
+            <div class="gauge-zone zone-amber-right"></div>
+            <div class="gauge-zone zone-red-right"></div>
+            <div class="gauge-center-tick"></div>
+            <div id="gauge-needle" class="gauge-needle" style="left: 50%;"></div>
+          </div>
+          <div class="gauge-scale-nums">
+            <span>-40 ms</span>
+            <span>-15 ms</span>
+            <span>0</span>
+            <span>+15 ms</span>
+            <span>+40 ms</span>
+          </div>
+        </div>
+
+        <div class="diagnosis-box">
+          <div
+            id="beat-badge"
+            class="beat-badge neutral has-tooltip"
+            title="Diagnóstico automático del nivel de alineación según los últimos golpes medidos."
+            data-tooltip="Clasificación automática de la alineación: En compás (≤ 3 ms o ≤ 0.5 %), Ajuste fino (≤ 10 ms o ≤ 1.5 %) o En cojera (> 10 ms)."
+          >
+            Esperando al menos 4 golpes…
+          </div>
+          <div class="beat-main-readout">
+            <span
+              id="metric-beat-ms"
+              class="big-number has-tooltip"
+              title="Beat error (error de compás) en milisegundos: mitad de la diferencia absoluta entre TIC→TAC y TAC→TIC."
+              data-tooltip="Beat error (cojera): equivale a |TIC→TAC − TAC→TIC| / 2. Representa cuántos milisegundos debes desplazar el punto muerto del escape para igualar ambos semiperíodos."
+            >— ms</span>
+            <span
+              id="metric-beat-pct"
+              class="sub-number has-tooltip"
+              title="Error de compás expresado como porcentaje del semiperíodo medio."
+              data-tooltip="Porcentaje de asimetría respecto al semiperíodo medio del péndulo. Un valor inferior al 0.5 % es excelente para relojería mecánica doméstica."
+            >(— %)</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Tarjetas de métricas detalladas -->
+      <section class="metrics-grid" aria-label="Métricas de tiempo y filtrado">
+        <article
+          class="card metric-card tic-border has-tooltip"
+          title="Duración media del intervalo desde el golpe TIC hasta el golpe TAC en la ventana activa."
+          data-tooltip="Intervalo medio TIC → TAC calculado sobre la ventana móvil seleccionada, junto con su desviación estándar propia (dispersión interna)."
+        >
+          <div class="metric-top">
+            <span class="metric-label">TIC → TAC</span>
+            <button
+              type="button"
+              class="tip-btn"
+              aria-label="Ayuda sobre TIC a TAC"
+              title="Tiempo medio entre un golpe par (TIC) y el siguiente impar (TAC)."
+              data-tooltip="Mide en milisegundos la primera mitad de la oscilación del péndulo. Para estar perfectamente calibrado debe igualarse con TAC → TIC."
+            >?</button>
+          </div>
+          <div id="metric-tictac" class="metric-value">— ms</div>
+          <div id="metric-tictac-std" class="metric-foot">σ: — ms · n=0</div>
+        </article>
+
+        <article
+          class="card metric-card tac-border has-tooltip"
+          title="Duración media del intervalo desde el golpe TAC hasta el golpe TIC en la ventana activa."
+          data-tooltip="Intervalo medio TAC → TIC calculado sobre la ventana móvil seleccionada, junto con su desviación estándar propia."
+        >
+          <div class="metric-top">
+            <span class="metric-label">TAC → TIC</span>
+            <button
+              type="button"
+              class="tip-btn"
+              aria-label="Ayuda sobre TAC a TIC"
+              title="Tiempo medio entre un golpe impar (TAC) y el siguiente par (TIC)."
+              data-tooltip="Mide en milisegundos la oscilación de retorno del péndulo. Compara este valor con TIC → TAC para saber qué rama dura más."
+            >?</button>
+          </div>
+          <div id="metric-tactic" class="metric-value">— ms</div>
+          <div id="metric-tactic-std" class="metric-foot">σ: — ms · n=0</div>
+        </article>
+
+        <article
+          class="card metric-card has-tooltip"
+          title="Cadencia del reloj en golpes por minuto (BPM) y semiperíodo medio."
+          data-tooltip="Cadencia media del reloj (golpes por minuto) y semiperíodo medio. Sirve además para ajustar la marcha (adelanto/atraso diario) subiendo o bajando la lenteja del péndulo."
+        >
+          <div class="metric-top">
+            <span class="metric-label">Cadencia</span>
+            <button
+              type="button"
+              class="tip-btn"
+              aria-label="Ayuda sobre cadencia"
+              title="Golpes por minuto y período completo de oscilación."
+              data-tooltip="Muestra los golpes por minuto (BPM = 60 / semiperíodo) y el período completo (TIC→TAC→TIC). Por ejemplo, un péndulo real de segundos da 60.00 BPM (semiperíodo de 1000 ms)."
+            >?</button>
+          </div>
+          <div id="metric-bpm" class="metric-value">— BPM</div>
+          <div id="metric-halfperiod" class="metric-foot">Semiperíodo: — ms</div>
+        </article>
+
+        <article
+          class="card metric-card has-tooltip"
+          title="Regularidad pulso a pulso y contador de ruidos descartados por el filtro."
+          data-tooltip="Estabilidad (jitter σ intrarrama) y eficacia del filtro discriminador: indica cuántos golpes reales se han validado y cuántos clics breves de fondo se han rechazado."
+        >
+          <div class="metric-top">
+            <span class="metric-label"> Señal / Filtro</span>
+            <button
+              type="button"
+              class="tip-btn"
+              aria-label="Ayuda sobre estabilidad y filtro de ruido"
+              title="Dispersión aleatoria y conteo de golpes válidos frente a clics descartados."
+              data-tooltip="«σ pulso» mide la dispersión aleatoria sin contar la cojera (menor = lectura más limpia). También muestra los golpes aceptados y los clics o roces (< 8 ms o > 52 ms) filtrados."
+            >?</button>
+          </div>
+          <div id="metric-jitter" class="metric-value">σ: — ms</div>
+          <div id="metric-counts" class="metric-foot">0 golpes · 0 ruidos filtrados</div>
+        </article>
+      </section>
+
+      <!-- Gráficos en vivo: envolvente filtrada + evolución de intervalos -->
+      <section class="card charts-card" aria-label="Monitores visuales de señal e intervalos">
+        <div class="chart-block">
+          <div class="card-header">
+            <h2 class="card-title">Envolvente filtrada (pasa-banda)</h2>
+            <div class="last-hit-wrap">
+              <span
+                id="pulse-indicator"
+                class="pulse-pill has-tooltip"
+                title="Destella con cada golpe TIC o TAC detectado o avisa cuando descarta un ruido corto."
+                data-tooltip="Indicador instantáneo del último evento acústico detectado por el procesador en tiempo real (TIC, TAC o clic de ruido rechazado)."
+              >Sin pulso</span>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre la envolvente filtrada"
+                title="Explica el gráfico de energía filtrada y la línea de umbral SNR."
+                data-tooltip="Muestra en tiempo real la energía RMS (2500–9500 Hz por defecto) una vez eliminado el ruido grave y la voz. La línea punteada ámbar es el umbral dinámico SNR: los picos del reloj deben superarla con holgura."
+              >?</button>
+            </div>
+          </div>
+          <canvas
+            id="canvas-envelope"
+            class="chart-canvas envelope-canvas has-tooltip"
+            width="640"
+            height="110"
+            title="Gráfico temporal de la envolvente acústica filtrada (azul) frente al umbral dinámico de detección (línea punteada ámbar)."
+            data-tooltip="Traza azul: envolvente RMS de la banda mecánica del reloj. Línea punteada ámbar: umbral automático sobre el ruido de fondo. Si los picos no cruzan la línea, acerca el móvil o baja la sensibilidad SNR."
+          ></canvas>
+        </div>
+
+        <div class="chart-block">
+          <div class="card-header">
+            <h2 class="card-title">Convergencia TIC→TAC vs TAC→TIC</h2>
+            <button
+              type="button"
+              class="tip-btn"
+              aria-label="Ayuda sobre el gráfico de convergencia"
+              title="Explica cómo usar el gráfico histórico de intervalos para nivelar el reloj."
+              data-tooltip="Cada punto muestra un intervalo medido: cian para TIC→TAC y ámbar para TAC→TIC. La línea central blanca es el semiperíodo ideal: cuando los puntos cian y ámbar se junten sobre la línea central, el reloj estará perfectamente alineado."
+            >?</button>
+          </div>
+          <canvas
+            id="canvas-intervals"
+            class="chart-canvas intervals-canvas has-tooltip"
+            width="640"
+            height="160"
+            title="Historial de los últimos intervalos TIC→TAC (cian) y TAC→TIC (ámbar) alrededor del semiperíodo medio."
+            data-tooltip="Evolución golpe a golpe de los últimos intervalos. Permite comprobar visualmente cómo se cierra la separación entre TIC→TAC (cian) y TAC→TIC (ámbar) a medida que nivelas el reloj."
+          ></canvas>
+        </div>
+      </section>
+
+      <!-- Configuración acústica desplegable -->
+      <details class="card settings-card">
+        <summary
+          class="settings-summary has-tooltip"
+          title="Despliega los parámetros del filtro pasa-banda, sensibilidad SNR y ventana de promediado."
+          data-tooltip="Ajustes avanzados del filtro pasa-banda y del discriminador de impulsos. Los valores iniciales (2500–9500 Hz, SNR 5.5x, mín. 8 ms) ya están optimizados para escapes mecánicos."
+        >
+          <span>Ajustes del filtro y detección</span>
+          <span class="summary-chevron" aria-hidden="true">▾</span>
+        </summary>
+
+        <div class="settings-body">
+          <div class="field-row">
+            <div class="field-head">
+              <label for="sel-window">Ventana móvil de cálculo</label>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre ventana móvil"
+                title="Número de intervalos recientes usados para calcular la media y el beat error."
+                data-tooltip="Define cuántos golpes recientes se promedian. Una ventana corta (8–12 golpes) reacciona muy rápido tras mover el reloj; una larga (20–30 golpes) reduce el efecto de ruidos puntuales."
+              >?</button>
+            </div>
+            <select
+              id="sel-window"
+              class="select-input has-tooltip"
+              title="Selecciona cuántos intervalos recientes entran en el cálculo de calibración."
+              data-tooltip="Cantidad de intervalos recientes promediados para calcular TIC→TAC, TAC→TIC y el error de compás."
+            >
+              <option value="8">Últimos 8 intervalos (respuesta rápida)</option>
+              <option value="12" selected>Últimos 12 intervalos (recomendado)</option>
+              <option value="20">Últimos 20 intervalos (alta precisión)</option>
+              <option value="30">Últimos 30 intervalos (muy estable)</option>
+              <option value="0">Toda la sesión acumulada</option>
+            </select>
+          </div>
+
+          <div class="field-row">
+            <div class="field-head">
+              <label for="rng-snr">Umbral de sensibilidad (SNR): <strong id="val-snr">5.5×</strong></label>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre umbral SNR"
+                title="Cuántas veces debe superar el golpe del reloj al nivel mediano de ruido de fondo."
+                data-tooltip="Multiplicador sobre el piso de ruido ambiente. Si se cuelan ruidos lejanos, súbelo (7–9×). Si el reloj suena muy suave y no detecta algún TAC débil, bájalo (3.5–4.5×)."
+              >?</button>
+            </div>
+            <input
+              id="rng-snr"
+              type="range"
+              min="3.0"
+              max="12.0"
+              step="0.5"
+              value="5.5"
+              class="range-input has-tooltip"
+              title="Ajusta la relación señal/ruido mínima exigida para disparar la detección de un golpe."
+              data-tooltip="Relación señal/ruido mínima exigida sobre el fondo estacionario (5.5× por defecto)."
+            />
+          </div>
+
+          <div class="field-row">
+            <div class="field-head">
+              <label for="rng-low">Corte grave pasa-altos: <strong id="val-low">2500 Hz</strong></label>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre frecuencia de corte inferior"
+                title="Elimina todas las frecuencias graves y medias por debajo de este valor (voces, pasos, motores)."
+                data-tooltip="Frecuencia inferior del filtro pasa-banda (-24 dB/oct). Cortar por debajo de 2500 Hz elimina voces humanas, tráfico, zumbidos eléctricos y pasos sin afectar al chasquido metálico del áncora."
+              >?</button>
+            </div>
+            <input
+              id="rng-low"
+              type="range"
+              min="800"
+              max="5000"
+              step="100"
+              value="2500"
+              class="range-input has-tooltip"
+              title="Frecuencia mínima en hercios que deja pasar el filtro hacia el detector."
+              data-tooltip="Frecuencia de corte inferior del filtro pasa-banda (recomendado: 2500 Hz)."
+            />
+          </div>
+
+          <div class="field-row">
+            <div class="field-head">
+              <label for="rng-high">Corte agudo pasa-bajos: <strong id="val-high">9500 Hz</strong></label>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre frecuencia de corte superior"
+                title="Elimina el siseo electrónico de muy alta frecuencia por encima de este valor."
+                data-tooltip="Frecuencia superior del filtro pasa-banda (-24 dB/oct). Suprime el siseo térmico del micrófono por encima de 9500 Hz conservando la banda de máxima resonancia del escape (3–9 kHz)."
+              >?</button>
+            </div>
+            <input
+              id="rng-high"
+              type="range"
+              min="6000"
+              max="14000"
+              step="250"
+              value="9500"
+              class="range-input has-tooltip"
+              title="Frecuencia máxima en hercios que deja pasar el filtro hacia el detector."
+              data-tooltip="Frecuencia de corte superior del filtro pasa-banda (recomendado: 9500 Hz)."
+            />
+          </div>
+
+          <div class="field-row">
+            <div class="field-head">
+              <label for="rng-mindur">Duración mínima del golpe: <strong id="val-mindur">8 ms</strong></label>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre duración mínima"
+                title="Descarta chasquidos espurios ultracortos cuya duración efectiva sea menor que este umbral."
+                data-tooltip="Los roces o clics eléctricos suelen durar 1–3 ms, mientras que el impacto mecánico del diente sobre el áncora resuena entre 14 y 45 ms. Exigir al menos 8 ms elimina falsos positivos."
+              >?</button>
+            </div>
+            <input
+              id="rng-mindur"
+              type="range"
+              min="3"
+              max="20"
+              step="1"
+              value="8"
+              class="range-input has-tooltip"
+              title="Duración mínima en milisegundos para considerar válido un golpe del reloj."
+              data-tooltip="Duración mínima de resonancia exigida al pulso (8 ms por defecto)."
+            />
+          </div>
+
+          <div class="field-row">
+            <div class="field-head">
+              <label for="rng-minint">Separación mínima entre golpes: <strong id="val-minint">350 ms</strong></label>
+              <button
+                type="button"
+                class="tip-btn"
+                aria-label="Ayuda sobre separación mínima"
+                title="Tiempo muerto mínimo entre dos golpes consecutivos válidos para evitar dobles disparos por eco."
+                data-tooltip="Evita que el rebote mecánico dentro del mismo golpe cuente doble. Ponlo aproximadamente a la mitad del semiperíodo de tu reloj (350 ms sirve para relojes de 50 a 140 BPM)."
+              >?</button>
+            </div>
+            <input
+              id="rng-minint"
+              type="range"
+              min="180"
+              max="900"
+              step="10"
+              value="350"
+              class="range-input has-tooltip"
+              title="Tiempo mínimo en milisegundos que debe transcurrir entre un golpe válido y el siguiente."
+              data-tooltip="Tiempo mínimo entre golpes consecutivos del reloj (350 ms por defecto)."
+            />
+          </div>
+
+          <div class="field-row toggle-row">
+            <label
+              class="checkbox-label has-tooltip"
+              for="chk-monitor"
+              title="Envía el sonido filtrado a la salida de audio (usar únicamente con auriculares para no acoplar el micrófono)."
+              data-tooltip="Permite escuchar en vivo el tic-tac filtrado y limpio. Actívalo SOLO si llevas auriculares conectados para evitar pitidos de acople entre el altavoz y el micrófono del móvil."
+            >
+              <input id="chk-monitor" type="checkbox" />
+              <span>Escuchar audio filtrado (solo con auriculares)</span>
+            </label>
+
+            <button
+              id="btn-defaults"
+              type="button"
+              class="btn btn-ghost btn-small has-tooltip"
+              title="Restaura todos los controles deslizantes y filtros a sus valores óptimos de fábrica."
+              data-tooltip="Devuelve el filtro pasa-banda (2500–9500 Hz), el umbral SNR (5.5×), la duración mínima (8 ms) y la ventana móvil (12) a su configuración óptima inicial."
+            >
+              Restaurar ajustes
+            </button>
+          </div>
+        </div>
+      </details>
+
+      <!-- Tabla compacta de últimos golpes -->
+      <details class="card log-card">
+        <summary
+          class="settings-summary has-tooltip"
+          title="Muestra u oculta el listado numérico detallado de los últimos golpes registrados."
+          data-tooltip="Despliega el registro cronológico de los últimos golpes detectados con su instante exacto, intervalo en milisegundos, desviación y duración de resonancia."
+        >
+          <span>Registro detallado de golpes</span>
+          <span class="summary-chevron" aria-hidden="true">▾</span>
+        </summary>
+        <div class="table-scroll">
+          <table class="events-table">
+            <thead>
+              <tr>
+                <th title="Número correlativo de golpe detectado.">#</th>
+                <th title="Clasificación alterna del golpe del escape (TIC o TAC).">Tipo</th>
+                <th title="Instante de inicio del golpe en segundos desde el arranque.">Inicio (s)</th>
+                <th title="Intervalo respecto al golpe inmediato anterior en milisegundos.">Δt (ms)</th>
+                <th title="Duración de la resonancia mecánica del pulso en milisegundos.">Dur (ms)</th>
+              </tr>
+            </thead>
+            <tbody id="events-tbody">
+              <tr>
+                <td colspan="5" class="empty-row">Aún no se han registrado golpes.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </details>
+    </main>
+  </div>
+
+  <!-- Globo flotante accesible para tooltips táctiles (Android) y puntero -->
+  <div id="tooltip-popover" class="tooltip-popover hidden" role="tooltip" aria-live="polite">
+    <p id="tooltip-text" class="tooltip-text"></p>
+    <button
+      id="tooltip-close"
+      type="button"
+      class="tooltip-close"
+      aria-label="Cerrar descripción"
+      title="Cierra este cuadro de ayuda."
+    >✕</button>
+  </div>
+
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
